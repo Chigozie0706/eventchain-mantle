@@ -1,0 +1,154 @@
+/* :root{
+    --line-border-fill: #630cf1;
+    --line-border-empty: #383838;
+} */
+
+.container{
+width:  550px;
+background-color: white;
+padding:  1rem 2rem;
+border-radius: 5px;
+overflow-x: hidden;
+}
+
+.container .content h2{
+font-size:  2rem;
+color:  #930303;
+
+}
+
+/* .progress_container{
+    display: flex;
+    justify-content: space-between;
+    margin:  1rem 0;
+    position: relative;
+} */
+
+.progress_container {
+  position: relative;
+  margin: 2rem 0 3rem;
+  width: 100%;
+}
+
+
+.steps_with_labels {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+}
+
+
+.step_container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 2;
+}
+
+
+/* .progress_container::before{
+    content: "";
+    position: absolute;
+    background-color: #ddd;
+    height: 4px;
+    width: 100%;
+    top: 50%;
+    left: 0;
+    z-index: 1;
+    transform: translateY(-50%);
+} */
+
+.progress{
+    background-color:  #630cf1;
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    transform: translateY(-50%);
+    height: 4px;
+    z-index: 1;
+    transition: all 0.8s ease-in;
+}
+
+/* .circle{
+    background-color:  #ddd;
+    height: 30px;
+    width: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
+    z-index: 1;
+} */
+
+
+.circle {
+  background-color: #ddd;
+  height: 30px;
+  width: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 50%;
+  z-index: 2;
+  margin-bottom: 8px;
+}
+
+
+/* .circle.active{
+    border-color: #383838;
+    color: #fff;
+    background-color: orangered;
+} */
+
+.circle.active {
+  border-color: #383838;
+  color: #fff;
+  background-color: orangered;
+}
+
+.label {
+  font-size: 0.75rem;
+  color: #888;
+  text-align: center;
+  max-width: 80px;
+  word-wrap: break-word;
+}
+
+.label.active {
+  color: orangered;
+  font-weight: bold;
+}
+
+.btns{
+    display: flex;
+    justify-content: space-between;
+    margin: 1rem;
+}
+
+.btn{
+    outline: none;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    background-color: orangered;
+    color: white;
+    padding: 4px 40px;
+}
+
+.btn:active{
+    outline: none;
+    transform: scale(0.98);
+
+}
+
+.disabled{
+    outline: none;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    background-color: orangered;
+    color: white;
+    padding: 4px 40px;
+    cursor: not-allowed;
+}
