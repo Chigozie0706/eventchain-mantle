@@ -45,15 +45,6 @@ export default function Home() {
 
   const [address1, setAddress1] = useState<string | null>(null);
 
-  const {
-    data: balanceData,
-    isLoading: isBalanceLoading,
-    isError: isBalanceError,
-  } = useBalance({
-    address,
-    chainId: 44787, // Celo Alfajores testnet
-  });
-
   useEffect(() => {
     if (isLoading) {
       setLoading(true);

@@ -1,89 +1,105 @@
-import { DollarSign, Trash2, XCircle } from "lucide-react";
+import {
+  Calendar,
+  CheckCircle,
+  Clock,
+  DollarSign,
+  MapPin,
+  RefreshCw,
+  Shield,
+  Ticket,
+  Trash2,
+  Users,
+  Wallet,
+  XCircle,
+} from "lucide-react";
 import { useState } from "react";
 
-interface CreatorEventCardProps {
-  event: {
-    index: number;
-    owner: string;
-    eventName: string;
-    eventCardImgUrl: string;
-    eventDetails: string;
-    startDate: number;
-    endDate: number;
-    startTime: number;
-    endTime: number;
-    eventLocation: string;
-    isActive: boolean;
-    isCanceled: boolean;
-    ticketPrice: number;
-    paymentToken: string;
-  };
-  onDelete: (eventId: number) => void;
-  onCancel: (eventId: number) => Promise<void>;
-  onClaimFunds: (eventId: number) => Promise<void>;
-  loading: boolean;
-  cancelLoading: boolean;
-  claimLoading: boolean;
+interface Event {
+  index: number;
+  owner: string;
+  eventName: string;
+  eventCardImgUrl: string;
+  eventDetails: string;
+  startDate: number;
+  endDate: number;
+  startTime: number;
+  endTime: number;
+  eventLocation: string;
+  isActive: boolean;
+  ticketPrice: number;
+  fundsHeld: number;
+  minimumAge: number;
+  maxCapacity: number;
+  isCanceled: boolean;
+  fundsReleased: boolean;
+  exists: boolean;
+  refundPolicy: RefundPolicy;
+  refundBufferHours: number;
 }
 
-const mentoTokens: Record<string, string> = {
-  "0x765de816845861e75a25fca122bb6898b8b1282a": "cUSD",
-  "0xd8763cba276a3738e6de85b4b3bf5fded6d6ca73": "cEUR",
-  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": "cREAL",
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": "USDT",
-  "0x0000000000000000000000000000000000000000": "CELO",
+enum RefundPolicy {
+  NO_REFUND = 0,
+  REFUND_BEFORE_START = 1,
+  CUSTOM_BUFFER = 2,
+}
+
+const REFUND_POLICY_LABELS = {
+  [RefundPolicy.NO_REFUND]: "No Refunds",
+  [RefundPolicy.REFUND_BEFORE_START]: "Refund Before Start",
+  [RefundPolicy.CUSTOM_BUFFER]: "Custom Buffer",
 };
 
-const CreatorEventCard: React.FC<CreatorEventCardProps> = ({
+const CreatorEventCard = ({
   event,
-  onDelete,
   onCancel,
-  onClaimFunds,
-  loading,
+  onClaim,
+  onDelete,
+  onWithdraw,
   cancelLoading,
   claimLoading,
+  deleteLoading,
+  attendeeCount,
+}: {
+  event: Event;
+  onCancel: (id: number) => void;
+  onClaim: (id: number) => void;
+  onDelete: (id: number) => void;
+  onWithdraw: () => void;
+  cancelLoading: boolean;
+  claimLoading: boolean;
+  deleteLoading: boolean;
+  attendeeCount: number;
 }) => {
   const [imgError, setImgError] = useState(false);
 
-  const formatTicketPrice = (price: number) => {
-    if (price < 1e18) {
-      return price.toFixed(3);
-    }
-    return (price / 1e18).toFixed(2);
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   };
 
-  const formattedTicketPrice = formatTicketPrice(event.ticketPrice);
-
-  // Normalize token address for comparison (lowercase and trim)
-  const normalizedToken = event.paymentToken?.trim().toLowerCase();
-  const tokenSymbol = mentoTokens[normalizedToken] || event.paymentToken;
-
-  // Format date and time
-  const formattedStartDate = new Date(
-    event.startDate * 1000
-  ).toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-
-  const formattedStartTime = new Date(
-    event.startTime * 1000
-  ).toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-
-  const formattedEndTime = new Date(event.endTime * 1000).toLocaleTimeString(
-    undefined,
-    {
+  const formatTime = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
-    }
-  );
+    });
+  };
+
+  const isEventEnded = event.endDate < Math.floor(Date.now() / 1000);
+  const canClaimFunds =
+    isEventEnded &&
+    !event.isCanceled &&
+    !event.fundsReleased &&
+    event.fundsHeld > 0;
+  const canCancel =
+    event.isActive &&
+    !event.isCanceled &&
+    event.startDate > Math.floor(Date.now() / 1000);
+  const capacityPercent = (attendeeCount / Number(event.maxCapacity)) * 100;
 
   const getImageUrl = () => {
     if (!event.eventCardImgUrl) return "/default-event.jpg";
@@ -94,154 +110,186 @@ const CreatorEventCard: React.FC<CreatorEventCardProps> = ({
 
   return (
     <div
-      className={`relative flex flex-col w-full max-w-sm p-4 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow ${
-        event.isCanceled ? "opacity-70 border-2 border-red-200" : ""
+      className={`relative bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden ${
+        event.isCanceled ? "opacity-75 ring-2 ring-red-300" : ""
       }`}
     >
+      {/* Status Badge */}
+      <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+        {event.isCanceled && (
+          <span className="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
+            <XCircle size={14} />
+            CANCELED
+          </span>
+        )}
+        {!event.isCanceled && event.isActive && (
+          <span className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
+            <CheckCircle size={14} />
+            ACTIVE
+          </span>
+        )}
+        {isEventEnded && !event.isCanceled && (
+          <span className="bg-gray-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
+            ENDED
+          </span>
+        )}
+      </div>
+
       {/* Action Buttons */}
-      <div className="absolute top-3 right-3 flex gap-2">
-        {/* Cancel Button */}
-        {event.isActive && !event.isCanceled && (
+      <div className="absolute top-4 right-4 z-10 flex gap-2">
+        {canCancel && (
           <button
             onClick={() => onCancel(event.index)}
             disabled={cancelLoading}
-            className="bg-yellow-500 text-white p-2 rounded-full shadow-md hover:bg-yellow-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Cancel event"
+            className="bg-yellow-500 hover:bg-yellow-600 text-white p-2.5 rounded-full shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-110"
+            title="Cancel event"
           >
-            <XCircle size={16} />
+            {cancelLoading ? (
+              <RefreshCw size={16} className="animate-spin" />
+            ) : (
+              <XCircle size={16} />
+            )}
           </button>
         )}
 
-        {/* Claim Button */}
-        {/* {eventEnded && !event.isCanceled && ( */}
-
-        {/* <button
-          onClick={() => onClaimFunds(event.index)}
-          disabled={claimLoading}
-          className="bg-green-500 text-white p-2 rounded-full shadow-md hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Claim funds"
+        <button
+          onClick={() => onDelete(event.index)}
+          disabled={deleteLoading}
+          className="bg-red-500 hover:bg-red-600 text-white p-2.5 rounded-full shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-110"
+          title="Delete event"
         >
-          <DollarSign size={16} />
-        </button> */}
-
-        {/* )} */}
-
-        {/* Delete Button */}
-        {/* <button
-          // onClick={() => onDelete(event.index)}
-          disabled={loading}
-          className="bg-red-500 text-white p-2 rounded-full shadow-md hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Delete event"
-        >
-          <Trash2 size={16} />
-        </button> */}
+          {deleteLoading ? (
+            <RefreshCw size={16} className="animate-spin" />
+          ) : (
+            <Trash2 size={16} />
+          )}
+        </button>
       </div>
 
-      {/* Canceled Badge */}
-      {event.isCanceled && (
-        <div className="absolute top-3 left-3 bg-red-500 text-white px-2 py-1 rounded-md text-xs font-bold ">
-          CANCELED
-        </div>
-      )}
-
-      <div className="w-full h-48 overflow-hidden rounded-lg ">
+      {/* Event Image */}
+      <div className="relative h-56 overflow-hidden bg-gradient-to-br from-purple-100 to-blue-100">
         <img
-          src={imgError ? "/default-event.jpg" : getImageUrl()}
+          src={
+            imgError
+              ? "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400"
+              : event.eventCardImgUrl
+          }
           alt={event.eventName}
           className="w-full h-full object-cover"
           onError={() => setImgError(true)}
         />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
       </div>
 
       {/* Event Details */}
-      <div className="mt-4 space-y-2">
-        <h2 className="text-lg font-semibold text-gray-900 line-clamp-1">
+      <div className="p-5 space-y-4">
+        <h3 className="text-xl font-bold text-gray-900 line-clamp-2 min-h-[3.5rem]">
           {event.eventName}
-        </h2>
+        </h3>
 
-        <div className="flex items-center text-sm text-gray-600">
-          <svg
-            className="w-4 h-4 mr-1"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-          <span>{formattedStartDate}</span>
+        <div className="space-y-2.5">
+          <div className="flex items-center text-sm text-gray-600">
+            <Calendar className="w-4 h-4 mr-2 text-purple-500 flex-shrink-0" />
+            <span className="line-clamp-1">{formatDate(event.startDate)}</span>
+          </div>
+
+          <div className="flex items-center text-sm text-gray-600">
+            <Clock className="w-4 h-4 mr-2 text-blue-500 flex-shrink-0" />
+            <span className="line-clamp-1">
+              {formatTime(event.startTime)} - {formatTime(event.endTime)}
+            </span>
+          </div>
+
+          <div className="flex items-center text-sm text-gray-600">
+            <MapPin className="w-4 h-4 mr-2 text-red-500 flex-shrink-0" />
+            <span className="line-clamp-1">{event.eventLocation}</span>
+          </div>
+
+          {/* Capacity Bar */}
+          <div className="pt-2">
+            <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+              <span className="flex items-center gap-1">
+                <Users size={14} />
+                Capacity
+              </span>
+              <span className="font-semibold">
+                {attendeeCount} / {event.maxCapacity}
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className={`h-2 rounded-full transition-all ${
+                  capacityPercent >= 90
+                    ? "bg-red-500"
+                    : capacityPercent >= 70
+                    ? "bg-yellow-500"
+                    : "bg-green-500"
+                }`}
+                style={{ width: `${Math.min(capacityPercent, 100)}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Age Restriction & Refund Policy */}
+          <div className="flex gap-2 pt-2">
+            {event.minimumAge > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">
+                <Shield size={12} />
+                {event.minimumAge}+
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+              <Ticket size={12} />
+              {REFUND_POLICY_LABELS[event.refundPolicy]}
+            </span>
+          </div>
         </div>
 
-        <div className="flex items-center text-sm text-gray-600">
-          <svg
-            className="w-4 h-4 mr-1"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <span>
-            {formattedStartTime} - {formattedEndTime}
-          </span>
-        </div>
+        {/* Financials */}
+        <div className="pt-3 border-t border-gray-200">
+          <div className="flex justify-between items-center mb-3">
+            <div>
+              <p className="text-xs text-gray-500">Ticket Price</p>
+              <p className="text-lg font-bold text-gray-900">
+                {event.ticketPrice.toFixed(2)} MNT
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-500">Funds Held</p>
+              <p className="text-lg font-bold text-green-600">
+                {event.fundsHeld.toFixed(2)} MNT
+              </p>
+            </div>
+          </div>
 
-        <div className="flex items-center text-sm text-gray-600">
-          <svg
-            className="w-4 h-4 mr-1"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-            />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-          </svg>
-          <span className="line-clamp-1">{event.eventLocation}</span>
-        </div>
+          {/* Claim Funds Button */}
+          {canClaimFunds && (
+            <button
+              onClick={() => onClaim(event.index)}
+              disabled={claimLoading}
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-3 px-4 rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+            >
+              {claimLoading ? (
+                <>
+                  <RefreshCw size={18} className="animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Wallet size={18} />
+                  Release Funds ({event.fundsHeld.toFixed(2)} MNT)
+                </>
+              )}
+            </button>
+          )}
 
-        <div className="pt-2 flex justify-between items-center">
-          <span
-            className={`text-sm font-medium ${
-              event.isActive ? "text-green-500" : "text-red-500"
-            }`}
-          >
-            {event.isCanceled
-              ? "Canceled"
-              : event.isActive
-              ? "Active"
-              : "Inactive"}
-          </span>
-          <span className="text-sm font-semibold text-gray-900">
-            {formattedTicketPrice} {tokenSymbol}
-          </span>
+          {event.fundsReleased && (
+            <div className="w-full bg-gray-100 text-gray-600 py-3 px-4 rounded-xl font-semibold flex items-center justify-center gap-2">
+              <CheckCircle size={18} />
+              Funds Released
+            </div>
+          )}
         </div>
-
-        <button
-          className="w-full bg-orange-700 text-white p-3 rounded-lg font-semibold hover:bg-orange-800 transition"
-          onClick={() => onClaimFunds(event.index)}
-          disabled={claimLoading}
-        >
-          {claimLoading ? "Processing..." : "Claim Funds"}
-        </button>
       </div>
     </div>
   );
