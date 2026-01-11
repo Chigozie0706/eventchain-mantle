@@ -348,6 +348,7 @@ contract EventChain is ReentrancyGuard, Ownable {
         require(msg.value == event_.ticketPrice, "Incorrect payment amount");
 
         hasPurchasedTicket[_index][msg.sender] = true;
+
         isAttendee[_index][msg.sender] = true;
         attendeeIndex[_index][msg.sender] = eventAttendeesList[_index].length;
         eventAttendeesList[_index].push(msg.sender);
@@ -599,16 +600,14 @@ contract EventChain is ReentrancyGuard, Ownable {
     /**
      * @notice Get user's purchased events (without pagination)
      */
-    function getUserEvents()
-        public
-        view
-        returns (uint256[] memory, Event[] memory)
-    {
+    function getUserEvents(
+        address user
+    ) public view returns (uint256[] memory, Event[] memory) {
         uint256 userEventCount = 0;
 
         // Count user events
         for (uint256 i = 0; i < eventCount; i++) {
-            if (events[i].exists && hasPurchasedTicket[i][msg.sender]) {
+            if (events[i].exists && hasPurchasedTicket[i][user]) {
                 userEventCount++;
             }
         }
@@ -618,7 +617,7 @@ contract EventChain is ReentrancyGuard, Ownable {
 
         uint256 currentIndex = 0;
         for (uint256 i = 0; i < eventCount; i++) {
-            if (events[i].exists && hasPurchasedTicket[i][msg.sender]) {
+            if (events[i].exists && hasPurchasedTicket[i][user]) {
                 eventIds[currentIndex] = i;
                 userEvents[currentIndex] = events[i];
                 currentIndex++;

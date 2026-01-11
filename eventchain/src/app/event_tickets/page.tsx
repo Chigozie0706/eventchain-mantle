@@ -1,6 +1,6 @@
 "use client"; // Ensures this component runs on the client side in a Next.js app
 
-import EventTickets from "@/components/EventTickets";
+import EventTickets from "components/EventTickets";
 
 export default function EventTicket() {
   return (
