@@ -172,7 +172,7 @@ const CreatorEventCard = ({
           src={
             imgError
               ? "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400"
-              : event.eventCardImgUrl
+              : getImageUrl()
           }
           alt={event.eventName}
           className="w-full h-full object-cover"
