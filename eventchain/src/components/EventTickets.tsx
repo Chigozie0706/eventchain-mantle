@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ethers } from "ethers";
 import { useConnection, useReadContract, useWriteContract } from "wagmi";
 import {
   MapPin,
@@ -21,7 +20,7 @@ import {
   Gift,
 } from "lucide-react";
 
-import { toast } from "react-hot-toast";
+import { toast, Toaster } from "react-hot-toast";
 import contractABI from "contract/eventchainAbi.json";
 
 const CONTRACT_ADDRESS = "0x36faD67F403546f6c2947579a27d03bDAfe77d1a";
@@ -55,19 +54,67 @@ const REFUND_POLICY_NAMES = {
   2: "Custom Buffer Period",
 };
 
+// Sweet toast configurations
+const toastConfig = {
+  success: {
+    duration: 4000,
+    icon: "✅",
+    style: {
+      background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+      color: "#fff",
+      fontWeight: "600",
+      padding: "16px 24px",
+      borderRadius: "12px",
+      boxShadow: "0 10px 25px rgba(16, 185, 129, 0.3)",
+    },
+  },
+  error: {
+    duration: 5000,
+    icon: "❌",
+    style: {
+      background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+      color: "#fff",
+      fontWeight: "600",
+      padding: "16px 24px",
+      borderRadius: "12px",
+      boxShadow: "0 10px 25px rgba(239, 68, 68, 0.3)",
+    },
+  },
+  loading: {
+    icon: "⏳",
+    style: {
+      background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+      color: "#fff",
+      fontWeight: "600",
+      padding: "16px 24px",
+      borderRadius: "12px",
+      boxShadow: "0 10px 25px rgba(59, 130, 246, 0.3)",
+    },
+  },
+  info: {
+    duration: 3000,
+    icon: "ℹ️",
+    style: {
+      background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
+      color: "#fff",
+      fontWeight: "600",
+      padding: "16px 24px",
+      borderRadius: "12px",
+      boxShadow: "0 10px 25px rgba(99, 102, 241, 0.3)",
+    },
+  },
+};
+
 export default function EventTickets() {
   const [events, setEvents] = useState<Event[]>([]);
   const [pendingWithdrawal, setPendingWithdrawal] = useState<number>(0);
-  const [withdrawLoading, setWithdrawLoading] = useState(false);
-  const [toastMessage, setToastMessage] = useState<{
-    type: "success" | "error" | "loading" | "info";
-    message: string;
-  } | null>(null);
-  const { writeContractAsync } = useWriteContract();
   const { address, isConnected } = useConnection();
   const [refundLoading, setRefundLoading] = useState<Record<string, boolean>>(
     {}
   );
+
+  const refundTicket = useWriteContract();
+  const withdrawFunds = useWriteContract();
 
   const {
     data,
@@ -83,9 +130,6 @@ export default function EventTickets() {
     args: [address],
   });
 
-  const refundTicketWrite = useWriteContract();
-  const withdrawFundsWrite = useWriteContract();
-
   // Read pending withdrawal
   const { data: pendingWithdrawalData, refetch: refetchPendingWithdrawal } =
     useReadContract({
@@ -98,7 +142,7 @@ export default function EventTickets() {
   // Update pending withdrawal when data changes
   useEffect(() => {
     if (pendingWithdrawalData) {
-      const withdrawal = Number(pendingWithdrawalData) / 1e18; // Convert from wei to ETH
+      const withdrawal = Number(pendingWithdrawalData) / 1e18; // Convert from wei to MNT
       setPendingWithdrawal(withdrawal);
     }
   }, [pendingWithdrawalData]);
@@ -114,18 +158,6 @@ export default function EventTickets() {
     }
   }, [isError, contractError]);
 
-  // Add this to see what's actually being returned
-  useEffect(() => {
-    console.log("Contract read result:", {
-      data,
-      isSuccess,
-      isError,
-      error: contractError,
-      address,
-      contractAddress: CONTRACT_ADDRESS,
-    });
-  }, [data, isSuccess, isError, contractError, address]);
-
   useEffect(() => {
     if (isSuccess && data) {
       try {
@@ -135,10 +167,6 @@ export default function EventTickets() {
 
         const [eventIds, userEvents] = data as [string[], any[]];
 
-        console.log("Raw user events data received:", {
-          data,
-          timestamp: new Date().toISOString(),
-        });
         const formattedEvents = userEvents.map((event, index) => ({
           id: eventIds[index],
           owner: event.owner,
@@ -163,7 +191,6 @@ export default function EventTickets() {
         }));
 
         setEvents(formattedEvents);
-        console.log(formattedEvents);
       } catch (error) {
         console.error("🚨 Error processing user events data:", {
           error: error instanceof Error ? error.message : "Unknown error",
@@ -171,73 +198,122 @@ export default function EventTickets() {
           data,
           timestamp: new Date().toISOString(),
         });
+        toast.error("Failed to load events data", toastConfig.error);
       }
     }
   }, [isSuccess, data]);
 
   const requestRefund = async (id: string) => {
     if (!isConnected || !address) {
-      toast.error("Connect wallet first");
+      toast.error("🔌 Please connect your wallet first", toastConfig.error);
       return;
     }
 
     setRefundLoading((prev) => ({ ...prev, [id]: true }));
-    const toastId = toast.loading("Processing refund...");
+    const toastId = toast.loading(
+      "⏳ Processing refund request...",
+      toastConfig.loading
+    );
 
     try {
-      const tx = await writeContractAsync({
-        address: CONTRACT_ADDRESS,
-        abi: contractABI.abi,
-        functionName: "requestRefund",
-        args: [BigInt(id)],
-      });
+      refundTicket.mutate(
+        {
+          address: CONTRACT_ADDRESS,
+          abi: contractABI.abi,
+          functionName: "requestRefund",
+          args: [BigInt(id)],
+        },
+        {
+          onSuccess: async () => {
+            toast.dismiss(toastId);
+            toast.success(
+              "💰 Refund requested successfully!",
+              toastConfig.success
+            );
 
-      toast.dismiss(toastId);
-      toast.success("Refund requested successfully!");
+            // Refetch data after successful refund
+            await refetch();
+            await refetchPendingWithdrawal();
 
-      // Refetch data after successful refund
-      await refetch();
-      await refetchPendingWithdrawal();
+            setTimeout(() => {
+              toast.success(
+                "✅ Funds added to pending withdrawal",
+                toastConfig.info
+              );
+            }, 1000);
+          },
+          onError: (error: any) => {
+            console.error("Refund error:", error);
+            toast.dismiss(toastId);
+            const errorMsg =
+              error?.shortMessage || error?.message || "Refund request failed";
+            toast.error(`❌ ${errorMsg}`, toastConfig.error);
+          },
+          onSettled: () => {
+            setRefundLoading((prev) => ({ ...prev, [id]: false }));
+          },
+        }
+      );
     } catch (error: any) {
       console.error("Refund error:", error);
       toast.dismiss(toastId);
       toast.error(
-        error?.shortMessage || error?.message || "Refund request failed"
+        `❌ ${error?.message || "Refund request failed"}`,
+        toastConfig.error
       );
-    } finally {
       setRefundLoading((prev) => ({ ...prev, [id]: false }));
     }
   };
 
-  const withdrawFunds = async () => {
+  const handleWithdrawFunds = async () => {
     if (!address) {
-      toast.error("Connect wallet first");
+      toast.error("🔌 Please connect your wallet first", toastConfig.error);
       return;
     }
 
-    setWithdrawLoading(true);
-    const toastId = toast.loading("Withdrawing funds...");
+    const toastId = toast.loading(
+      "⏳ Withdrawing funds...",
+      toastConfig.loading
+    );
 
     try {
-      const tx = await writeContractAsync({
-        address: CONTRACT_ADDRESS,
-        abi: contractABI.abi,
-        functionName: "withdraw",
-      });
+      withdrawFunds.mutate(
+        {
+          address: CONTRACT_ADDRESS,
+          abi: contractABI.abi,
+          functionName: "withdraw",
+        },
+        {
+          onSuccess: async () => {
+            toast.dismiss(toastId);
+            toast.success("💸 Withdrawal successful!", toastConfig.success);
 
-      toast.dismiss(toastId);
-      toast.success("Withdrawal successful!");
+            await refetchPendingWithdrawal();
 
-      await refetchPendingWithdrawal();
+            setTimeout(() => {
+              toast.success("✅ Funds sent to your wallet", toastConfig.info);
+            }, 1000);
+          },
+          onError: (error: any) => {
+            console.error("Withdrawal error:", error);
+            toast.dismiss(toastId);
+            const errorMsg =
+              error?.shortMessage || error?.message || "Withdrawal failed";
+            toast.error(`❌ ${errorMsg}`, toastConfig.error);
+          },
+        }
+      );
     } catch (error: any) {
       console.error("Withdrawal error:", error);
       toast.dismiss(toastId);
-      toast.error(error?.shortMessage || error?.message || "Withdrawal failed");
-    } finally {
-      setWithdrawLoading(false);
+      toast.error(
+        `❌ ${error?.message || "Withdrawal failed"}`,
+        toastConfig.error
+      );
     }
   };
 
+  // FIXED: Correct event status calculation using full timestamps
   const getEventStatus = (event: Event) => {
     if (event.isCanceled)
       return {
@@ -256,8 +332,10 @@ export default function EventTickets() {
         icon: AlertCircle,
       };
 
-    const now = Date.now() / 1000;
-    if (now < event.startTime)
+    const now = Date.now() / 1000; // Current time in seconds
+
+    // FIXED: Compare with startDate and endDate (full timestamps), not startTime/endTime
+    if (now < event.startDate)
       return {
         text: "Upcoming",
         color: "text-blue-600",
@@ -265,7 +343,7 @@ export default function EventTickets() {
         borderColor: "border-blue-200",
         icon: Clock,
       };
-    if (now >= event.startTime && now <= event.endTime)
+    if (now >= event.startDate && now <= event.endDate)
       return {
         text: "Live Now",
         color: "text-green-600",
@@ -328,17 +406,19 @@ export default function EventTickets() {
     });
   };
 
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
+  const formatTime = (seconds: number) => {
+    // Format time from seconds since midnight
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const period = hours >= 12 ? "PM" : "AM";
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes.toString().padStart(2, "0")} ${period}`;
   };
 
   if (!isConnected) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-6">
+        <Toaster position="top-right" />
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl shadow-xl p-12 text-center border border-gray-100">
             <Wallet className="w-20 h-20 mx-auto mb-6 text-indigo-600" />
@@ -348,12 +428,6 @@ export default function EventTickets() {
             <p className="text-gray-600 mb-8 text-lg">
               Access your event tickets and manage refunds
             </p>
-            <button
-              //   onClick={() => setIsConnected(true)}
-              className="px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all font-semibold text-lg shadow-lg hover:shadow-xl"
-            >
-              Connect Wallet
-            </button>
           </div>
         </div>
       </div>
@@ -363,6 +437,7 @@ export default function EventTickets() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-6">
+        <Toaster position="top-right" />
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl shadow-xl p-12 text-center border border-gray-100">
             <Loader2 className="w-16 h-16 mx-auto mb-6 text-indigo-600 animate-spin" />
@@ -375,36 +450,7 @@ export default function EventTickets() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4 sm:p-6">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 animate-fade-in max-w-md">
-          <div
-            className={`px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 border-2 ${
-              toastMessage.type === "success"
-                ? "bg-green-500 border-green-600"
-                : toastMessage.type === "error"
-                ? "bg-red-500 border-red-600"
-                : toastMessage.type === "info"
-                ? "bg-blue-500 border-blue-600"
-                : "bg-indigo-500 border-indigo-600"
-            } text-white`}
-          >
-            {toastMessage.type === "loading" && (
-              <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
-            )}
-            {toastMessage.type === "success" && (
-              <CheckCircle className="w-5 h-5 flex-shrink-0" />
-            )}
-            {toastMessage.type === "error" && (
-              <XCircle className="w-5 h-5 flex-shrink-0" />
-            )}
-            {toastMessage.type === "info" && (
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            )}
-            <span className="font-medium">{toastMessage.message}</span>
-          </div>
-        </div>
-      )}
+      <Toaster position="top-right" />
 
       <div className="max-w-7xl mx-auto">
         {/* Header */}
@@ -438,7 +484,7 @@ export default function EventTickets() {
                     Pending Withdrawal
                   </p>
                   <p className="text-3xl font-bold">
-                    {pendingWithdrawal.toFixed(4)} ETH
+                    {pendingWithdrawal.toFixed(4)} MNT
                   </p>
                   <p className="text-sm opacity-75 mt-1">
                     Pull payment pattern - withdraw when ready
@@ -446,11 +492,11 @@ export default function EventTickets() {
                 </div>
               </div>
               <button
-                onClick={withdrawFunds}
-                disabled={withdrawLoading}
+                onClick={handleWithdrawFunds}
+                disabled={withdrawFunds.isPending}
                 className="w-full sm:w-auto px-6 py-3 bg-white text-emerald-600 font-bold rounded-xl hover:bg-gray-50 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {withdrawLoading ? (
+                {withdrawFunds.isPending ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
                     Processing...
@@ -567,7 +613,7 @@ export default function EventTickets() {
                               Ticket Price
                             </p>
                             <p className="text-gray-900 font-bold text-xl">
-                              {event.ticketPrice.toFixed(4)} ETH
+                              {event.ticketPrice.toFixed(4)} MNT
                             </p>
                           </div>
                         </div>
@@ -668,22 +714,6 @@ export default function EventTickets() {
           </div>
         )}
       </div>
-
-      <style>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 }

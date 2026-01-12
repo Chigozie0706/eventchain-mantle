@@ -20,7 +20,7 @@ export default function Tickets({ eventData, setEventData }: Props) {
     <>
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <FormInput label="Ticket Price (ETH)" error={errors} required>
+          <FormInput label="Ticket Price (MNT)" error={errors} required>
             <input
               type="number"
               name="ticketPrice"

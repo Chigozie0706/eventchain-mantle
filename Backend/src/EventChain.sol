@@ -35,11 +35,11 @@ contract EventChain is ReentrancyGuard, Ownable {
     }
 
     receive() external payable {
-        revert("Direct ETH transfers not allowed");
+        revert("Direct MNT transfers not allowed");
     }
 
     fallback() external payable {
-        revert("Direct ETH transfers not allowed");
+        revert("Direct MNT transfers not allowed");
     }
 
     struct Event {

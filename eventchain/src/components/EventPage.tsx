@@ -13,12 +13,8 @@ import {
   ChevronDown,
   Clock,
 } from "lucide-react";
-import { formatEventDate, formatEventTime, formatPrice } from "../utils/format";
 import { useConnection } from "wagmi";
-import { useEffect, useState } from "react";
-import { formatUnits } from "ethers";
-import { useParams, useRouter } from "next/navigation";
-import { ethers, formatEther } from "ethers";
+import { useState } from "react";
 
 export interface Event {
   owner: string;
@@ -45,8 +41,8 @@ export interface Event {
 export interface EventPageProps {
   event: Event;
   attendees: string[];
-  buyTicket: () => Promise<void>;
-  requestRefund: () => Promise<void>;
+  buyTicket: () => void; // Changed from Promise<void> to void since it's a handler
+  requestRefund: () => void; // Changed from Promise<void> to void
   loading: boolean;
   registering: boolean;
   refunding: boolean;
@@ -63,14 +59,9 @@ export default function EventPage({
   refunding,
   id,
 }: EventPageProps) {
-  const { address } = useConnection();
-  const router = useRouter();
+  const { address, isConnected } = useConnection();
   const [imgError, setImgError] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const { id: eventId } = useParams<{ id: string }>();
-  const [showToast, setShowToast] = useState(false);
   const [showRefundDetails, setShowRefundDetails] = useState(false);
-  const { isConnected } = useConnection();
 
   const formatEventDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleDateString("en-US", {
@@ -89,14 +80,14 @@ export default function EventPage({
     return `${displayHours}:${minutes.toString().padStart(2, "0")} ${period}`;
   };
 
-  // Format ticket price properly (converts Wei to ETH)
+  // Format ticket price properly (converts Wei to MNT)
   const formatTicketPrice = (price: number) => {
     try {
-      // Convert BigInt or number to string, then to ETH (divide by 10^18)
+      // Convert BigInt or number to string, then to MNT (divide by 10^18)
       const priceStr = price.toString();
       const priceNum = parseFloat(priceStr);
-      const priceInEth = priceNum / 1e18;
-      return priceInEth.toFixed(4);
+      const priceInMNT = priceNum / 1e18;
+      return priceInMNT.toFixed(4);
     } catch (error) {
       return "0.0000";
     }
@@ -122,12 +113,6 @@ export default function EventPage({
       return parts.slice(-2).join(",").trim();
     }
     return location;
-  };
-
-  const displayToast = (message: string) => {
-    setToastMessage(message);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
   };
 
   // Check if current user is registered
@@ -178,7 +163,7 @@ export default function EventPage({
               <div className="flex items-center gap-2 bg-black/30 backdrop-blur-md px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg">
                 <Ticket className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="font-medium text-xs sm:text-sm">
-                  {formattedTicketPrice} ETH
+                  {formattedTicketPrice} MNT
                 </span>
               </div>
             </div>
@@ -256,6 +241,7 @@ export default function EventPage({
                   )}&output=embed`}
                   className="w-full h-full border-0"
                   loading="lazy"
+                  title="Event Location Map"
                 />
               </div>
             </div>
@@ -346,7 +332,7 @@ export default function EventPage({
                       Price per ticket
                     </p>
                     <p className="text-3xl sm:text-4xl font-bold break-all">
-                      {formattedTicketPrice} ETH
+                      {formattedTicketPrice} MNT
                     </p>
                     <p className="text-white/80 text-xs sm:text-sm mt-2">
                       ≈ ${(parseFloat(formattedTicketPrice) * 3000).toFixed(2)}{" "}
@@ -386,7 +372,14 @@ export default function EventPage({
                         disabled={loading || refunding}
                         className="w-full bg-red-500 text-white py-2.5 sm:py-3 rounded-xl text-sm sm:text-base font-semibold hover:bg-red-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {refunding ? "Processing..." : "Request Refund"}
+                        {refunding ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Processing...
+                          </span>
+                        ) : (
+                          "Request Refund"
+                        )}
                       </button>
                     </div>
                   ) : (
