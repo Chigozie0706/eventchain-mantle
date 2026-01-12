@@ -6,12 +6,6 @@ import Tickets from "./eventCreation/steps/Tickets";
 import DateTime from "./eventCreation/steps/DateTime";
 import { EventData } from "./eventCreation/types";
 
-export type Token = {
-  symbol: string;
-  address: `0x${string}`;
-  decimals: number;
-};
-
 interface MultiStepProps {
   eventData: EventData;
   setEventData: React.Dispatch<React.SetStateAction<EventData>>;

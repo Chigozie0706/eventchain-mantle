@@ -213,7 +213,8 @@ const CreatorEventCard = ({
                 Capacity
               </span>
               <span className="font-semibold">
-                {attendeeCount} / {event.maxCapacity}
+                {/* {attendeeCount} /  */}
+                {event.maxCapacity}
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">

@@ -1,3 +1,5 @@
+"use client";
+
 import GoogleMapWithSearch from "components/AutoPlace";
 import { EventData } from "../types";
 import { FormInput } from "@/components/FormInput";
@@ -9,10 +11,9 @@ interface Props {
 }
 
 export default function Location({ eventData, setEventData }: Props) {
-  const [errors, setErrors] = useState("");
   return (
     <>
-      <FormInput label="Location" error={errors} required>
+      <FormInput label="Location" required>
         <GoogleMapWithSearch
           eventData={eventData}
           setEventData={setEventData}

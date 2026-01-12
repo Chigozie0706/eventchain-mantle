@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 
 interface FormInputProps {
   label: string;
-  error?: string;
+  // error?: string;
   required?: boolean;
   children: ReactNode;
   className?: string;
@@ -10,7 +10,7 @@ interface FormInputProps {
 
 export function FormInput({
   label,
-  error,
+  // error,
   required,
   children,
   className = "",
@@ -20,8 +20,9 @@ export function FormInput({
       <label className="block text-sm font-medium text-gray-700 mb-2">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
+
       {children}
-      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      {/* {error && <p className="mt-1 text-sm text-red-600">{error}</p>} */}
     </div>
   );
 }

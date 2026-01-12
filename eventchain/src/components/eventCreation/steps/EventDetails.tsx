@@ -1,6 +1,7 @@
+"use client";
+
 import { FormInput } from "@/components/FormInput";
 import { EventData } from "../types";
-import { useState } from "react";
 
 interface Props {
   eventData: EventData;
@@ -29,12 +30,10 @@ export default function EventDetails({
   handleDrop,
   handleDragOver,
 }: Props) {
-  const [errors, setErrors] = useState("");
-
   return (
     <>
       <div className="space-y-4">
-        <FormInput label="Event Name" error={errors} required>
+        <FormInput label="Event Name" required>
           <input
             type="text"
             name="eventName"
@@ -42,15 +41,12 @@ export default function EventDetails({
             onChange={(e) =>
               setEventData({ ...eventData, eventName: e.target.value })
             }
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition ${
-              // !errors ? "border-red-500" :
-              "border-gray-300"
-            }`}
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition ${"border-gray-300"}`}
             placeholder="e.g., Tech Conference 2026"
           />
         </FormInput>
 
-        <FormInput label="Event Image " error={errors} required>
+        <FormInput label="Event Image " required>
           <div
             className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md"
             onDrop={handleDrop}
@@ -94,7 +90,6 @@ export default function EventDetails({
           </div>
         </FormInput>
 
-        {/* Single Preview Section */}
         {preview && (
           <div className="mt-4">
             <img
@@ -116,7 +111,7 @@ export default function EventDetails({
         )}
       </div>
 
-      <FormInput label="Event Details" error={errors} required>
+      <FormInput label="Event Details" required>
         <textarea
           name="eventDetails"
           value={eventData.eventDetails}
@@ -125,14 +120,11 @@ export default function EventDetails({
           }
           placeholder="Describe your event in detail..."
           rows={4}
-          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition ${
-            // errors.eventDetails ? "border-red-500" :
-            "border-gray-300"
-          }`}
+          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition ${"border-gray-300"}`}
         ></textarea>
       </FormInput>
 
-      <FormInput label="Minimum Age" error={errors} required>
+      <FormInput label="Minimum Age" required>
         <input
           type="number"
           name="minimumAge"
@@ -143,10 +135,7 @@ export default function EventDetails({
           placeholder="Enter minimum age (0 for no restriction)"
           min="0"
           max="120"
-          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition ${
-            // errors.minimumAge ? "border-red-500" :
-            "border-gray-300"
-          }`}
+          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition ${"border-gray-300"}`}
         />
       </FormInput>
     </>

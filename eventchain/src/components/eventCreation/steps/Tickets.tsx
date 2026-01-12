@@ -1,4 +1,6 @@
-import { useState } from "react";
+"use client";
+
+import { useState, useEffect } from "react";
 import { EventData } from "../types";
 import { FormInput } from "@/components/FormInput";
 
@@ -14,51 +16,129 @@ interface Props {
 }
 
 export default function Tickets({ eventData, setEventData }: Props) {
-  const [errors, setErrors] = useState("");
+  const [errors, setErrors] = useState({
+    ticketPrice: "",
+    maxCapacity: "",
+    refundBufferHours: "",
+  });
+
+  // Validate inputs in real-time
+  useEffect(() => {
+    const newErrors = {
+      ticketPrice: "",
+      maxCapacity: "",
+      refundBufferHours: "",
+    };
+
+    // Validate ticket price
+    if (eventData.ticketPrice) {
+      const price = parseFloat(eventData.ticketPrice);
+      if (isNaN(price) || price < 0) {
+        newErrors.ticketPrice = "Price must be 0 or greater";
+      } else if (price > 1000000) {
+        newErrors.ticketPrice = "Price seems unusually high";
+      }
+    }
+
+    // Validate max capacity
+    if (eventData.maxCapacity) {
+      const capacity = parseInt(eventData.maxCapacity);
+      if (isNaN(capacity) || capacity <= 0) {
+        newErrors.maxCapacity = "Capacity must be greater than 0";
+      } else if (capacity > 100000) {
+        newErrors.maxCapacity = "Capacity cannot exceed 100,000";
+      }
+    }
+
+    // Validate refund buffer hours
+    if (eventData.refundPolicy === "2" && eventData.refundBufferHours) {
+      const bufferHours = parseInt(eventData.refundBufferHours);
+
+      if (isNaN(bufferHours) || bufferHours <= 0) {
+        newErrors.refundBufferHours = "Buffer must be greater than 0";
+      } else if (bufferHours > 720) {
+        newErrors.refundBufferHours =
+          "Buffer cannot exceed 720 hours (30 days)";
+      } else if (eventData.startDate && eventData.startTime) {
+        // Check if refund buffer exceeds time until event
+        const startDateTime = new Date(
+          `${eventData.startDate}T${eventData.startTime}`
+        );
+        const now = new Date();
+        const hoursUntilEvent =
+          (startDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+        if (bufferHours >= hoursUntilEvent) {
+          newErrors.refundBufferHours =
+            "Refund buffer exceeds time until event starts";
+        }
+      }
+    }
+
+    setErrors(newErrors);
+  }, [
+    eventData.ticketPrice,
+    eventData.maxCapacity,
+    eventData.refundBufferHours,
+    eventData.refundPolicy,
+    eventData.startDate,
+    eventData.startTime,
+  ]);
 
   return (
     <>
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <FormInput label="Ticket Price (MNT)" error={errors} required>
-            <input
-              type="number"
-              name="ticketPrice"
-              value={eventData.ticketPrice}
-              min="0"
-              step="0.001"
-              onChange={(e) =>
-                setEventData({ ...eventData, ticketPrice: e.target.value })
-              }
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition ${
-                // errors.ticketPrice ? "border-red-500" :
-                "border-gray-300"
-              }`}
-              placeholder="0.001"
-            />
+          <FormInput label="Ticket Price (MNT)" required>
+            <>
+              <input
+                type="number"
+                name="ticketPrice"
+                value={eventData.ticketPrice}
+                min="0"
+                step="0.001"
+                onChange={(e) =>
+                  setEventData({ ...eventData, ticketPrice: e.target.value })
+                }
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition ${
+                  errors.ticketPrice ? "border-red-500" : "border-gray-300"
+                }`}
+                placeholder="0.001"
+              />
+              {errors.ticketPrice && (
+                <p className="text-xs text-red-500 mt-1">
+                  {errors.ticketPrice}
+                </p>
+              )}
+            </>
           </FormInput>
 
-          <FormInput label="Max Capacity" error={errors} required>
-            <input
-              type="number"
-              min="1"
-              max="100000"
-              name="maxCapacity"
-              value={eventData.maxCapacity}
-              // onChange={(e) => updateFormData("maxCapacity", e.target.value)}
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition ${
-                // errors.maxCapacity ? "border-red-500" :
-                "border-gray-300"
-              }`}
-              placeholder="100"
-              onChange={(e) =>
-                setEventData({ ...eventData, maxCapacity: e.target.value })
-              }
-            />
+          <FormInput label="Max Capacity" required>
+            <>
+              <input
+                type="number"
+                min="1"
+                max="100000"
+                name="maxCapacity"
+                value={eventData.maxCapacity}
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition ${
+                  errors.maxCapacity ? "border-red-500" : "border-gray-300"
+                }`}
+                placeholder="100"
+                onChange={(e) =>
+                  setEventData({ ...eventData, maxCapacity: e.target.value })
+                }
+              />
+              {errors.maxCapacity && (
+                <p className="text-xs text-red-500 mt-1">
+                  {errors.maxCapacity}
+                </p>
+              )}
+            </>
           </FormInput>
         </div>
 
-        <FormInput label="Refund Policy" error={errors} required>
+        <FormInput label="Refund Policy" required>
           <select
             value={eventData.refundPolicy}
             onChange={(e) =>
@@ -73,7 +153,7 @@ export default function Tickets({ eventData, setEventData }: Props) {
         </FormInput>
 
         {eventData.refundPolicy === "2" && (
-          <FormInput label="Refund Buffer (Hours)" error={errors} required>
+          <FormInput label="Refund Buffer (Hours)" required>
             <>
               <input
                 type="number"
@@ -88,11 +168,17 @@ export default function Tickets({ eventData, setEventData }: Props) {
                   })
                 }
                 className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition ${
-                  // errors.refundBufferHours ? "border-red-500" :
-                  "border-gray-300"
+                  errors.refundBufferHours
+                    ? "border-red-500"
+                    : "border-gray-300"
                 }`}
                 placeholder="24"
               />
+              {errors.refundBufferHours && (
+                <p className="text-xs text-red-500 mt-1">
+                  {errors.refundBufferHours}
+                </p>
+              )}
               <p className="text-xs text-gray-500 mt-1">
                 Refunds allowed until this many hours before event start (max
                 720 hours / 30 days)

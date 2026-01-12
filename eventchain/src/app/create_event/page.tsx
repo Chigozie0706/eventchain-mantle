@@ -1,4 +1,4 @@
-"use client"; // Ensures this component runs on the client side in a Next.js app
+"use client";
 
 import EventForm from "@/components/EventForm";
 

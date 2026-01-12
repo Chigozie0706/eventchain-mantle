@@ -1,7 +1,8 @@
 "use client";
+
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "react-hot-toast";
+import { toast, Toaster } from "react-hot-toast";
 import { parseUnits } from "ethers";
 import axios from "axios";
 import MultiStep from "./MultiStep";
@@ -9,81 +10,73 @@ import {
   useConnection,
   useWriteContract,
   useWaitForTransactionReceipt,
-  useWalletClient,
   type BaseError,
 } from "wagmi";
 import contractABI from "../contract/eventchainAbi.json";
 import { EventData } from "./eventCreation/types";
 
-export interface Token {
-  symbol: string;
-  address: `0x${string}`;
-  decimals: number;
-}
-
 const CONTRACT_ADDRESS = "0x36faD67F403546f6c2947579a27d03bDAfe77d1a";
 
-// Enhanced toast configurations for better UX
+// Sweet toast configurations
 const toastConfig = {
   success: {
     duration: 4000,
     icon: "✅",
     style: {
-      background: "#10b981",
+      background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
       color: "#fff",
-      fontWeight: "500",
+      fontWeight: "600",
+      padding: "16px 24px",
+      borderRadius: "12px",
+      boxShadow: "0 10px 25px rgba(16, 185, 129, 0.3)",
     },
   },
   error: {
     duration: 5000,
     icon: "❌",
     style: {
-      background: "#ef4444",
+      background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
       color: "#fff",
-      fontWeight: "500",
+      fontWeight: "600",
+      padding: "16px 24px",
+      borderRadius: "12px",
+      boxShadow: "0 10px 25px rgba(239, 68, 68, 0.3)",
     },
   },
   loading: {
     icon: "⏳",
     style: {
-      background: "#3b82f6",
+      background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
       color: "#fff",
-      fontWeight: "500",
-    },
-  },
-  warning: {
-    duration: 4000,
-    icon: "⚠️",
-    style: {
-      background: "#f59e0b",
-      color: "#fff",
-      fontWeight: "500",
+      fontWeight: "600",
+      padding: "16px 24px",
+      borderRadius: "12px",
+      boxShadow: "0 10px 25px rgba(59, 130, 246, 0.3)",
     },
   },
   info: {
     duration: 3000,
     icon: "ℹ️",
     style: {
-      background: "#6366f1",
+      background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
       color: "#fff",
-      fontWeight: "500",
+      fontWeight: "600",
+      padding: "16px 24px",
+      borderRadius: "12px",
+      boxShadow: "0 10px 25px rgba(99, 102, 241, 0.3)",
     },
   },
 };
 
 const EventForm = () => {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { data: walletClient } = useWalletClient();
-  const { address } = useConnection();
   const [errors, setErrors] = useState("");
-  const transfer = useWriteContract();
-  const hash = transfer.data;
-  const error1 = transfer.error;
+  const { address, isConnected } = useConnection();
+
+  const createEventWrite = useWriteContract();
 
   const [eventData, setEventData] = useState<EventData>({
     eventName: "",
@@ -96,26 +89,51 @@ const EventForm = () => {
     ticketPrice: "",
     minimumAge: "0",
     maxCapacity: "",
-    refundPolicy: "1", // Default to REFUND_BEFORE_START
+    refundPolicy: "1",
     refundBufferHours: "",
     image: "",
   });
 
-  // Show wallet connection prompt
-  const showWalletPrompt = () => {
-    toast.error("Please connect your wallet to continue", {
-      ...toastConfig.error,
-      icon: "🔌",
+  // Transaction status monitoring
+  const { isLoading: isConfirming, isSuccess: isConfirmed } =
+    useWaitForTransactionReceipt({
+      hash: createEventWrite.data,
     });
-  };
 
-  const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
-  ) => {
-    setEventData({ ...eventData, [e.target.name]: e.target.value });
-  };
+  // Handle transaction confirmation
+  useEffect(() => {
+    if (isConfirmed) {
+      toast.success(`🎉 Event "${eventData.eventName}" created successfully!`, {
+        ...toastConfig.success,
+        duration: 5000,
+      });
+
+      // Reset form
+      setEventData({
+        eventName: "",
+        eventDetails: "",
+        startDate: "",
+        endDate: "",
+        startTime: "",
+        endTime: "",
+        eventLocation: "",
+        ticketPrice: "",
+        minimumAge: "0",
+        maxCapacity: "",
+        refundPolicy: "1",
+        refundBufferHours: "",
+        image: "",
+      });
+      setFile(null);
+      setPreview(null);
+
+      // Redirect after delay - FIXED: Navigation is now enabled
+      setTimeout(() => {
+        toast.success("✅ Redirecting to events page...", toastConfig.info);
+        router.push("/view_events");
+      }, 1500);
+    }
+  }, [isConfirmed, eventData.eventName, router]);
 
   const validateForm = () => {
     try {
@@ -128,7 +146,8 @@ const EventForm = () => {
         !eventData.startTime ||
         !eventData.endTime ||
         !eventData.eventLocation ||
-        !eventData.ticketPrice
+        !eventData.ticketPrice ||
+        !eventData.maxCapacity
       ) {
         throw new Error("Please fill in all required fields");
       }
@@ -152,12 +171,34 @@ const EventForm = () => {
         throw new Error("End date/time must be after start date/time");
       }
 
+      // Validate minimum duration (1 hour)
+      const durationMs = endDateTime.getTime() - startDateTime.getTime();
+      const durationHours = durationMs / (1000 * 60 * 60);
+      if (durationHours < 1) {
+        throw new Error("Event must be at least 1 hour long");
+      }
+
+      // Validate maximum duration (365 days)
+      const durationDays = durationHours / 24;
+      if (durationDays > 365) {
+        throw new Error("Event duration cannot exceed 365 days");
+      }
+
       // Validate price
       const price = parseFloat(eventData.ticketPrice);
       if (isNaN(price))
         throw new Error("Please enter a valid number for price");
-      if (price <= 0) throw new Error("Price must be greater than 0");
+      if (price < 0) throw new Error("Price cannot be negative");
       if (price > 1000000) throw new Error("Price seems unusually high");
+
+      // Validate capacity
+      const capacity = parseInt(eventData.maxCapacity);
+      if (isNaN(capacity) || capacity <= 0) {
+        throw new Error("Please enter a valid capacity greater than 0");
+      }
+      if (capacity > 100000) {
+        throw new Error("Capacity cannot exceed 100,000");
+      }
 
       // Validate age
       const minAge = parseInt(eventData.minimumAge);
@@ -165,67 +206,65 @@ const EventForm = () => {
         throw new Error("Please enter a valid minimum age (0-120)");
       }
 
+      // Validate refund buffer if custom policy
+      if (eventData.refundPolicy === "2") {
+        const bufferHours = parseInt(eventData.refundBufferHours);
+        if (isNaN(bufferHours) || bufferHours <= 0 || bufferHours > 720) {
+          throw new Error("Refund buffer hours must be between 1 and 720");
+        }
+      }
+
       return true;
     } catch (error: any) {
-      toast.error(error.message, {
-        ...toastConfig.error,
-        icon: "⚠️",
-      });
+      toast.error(error.message, toastConfig.error);
       return false;
     }
   };
 
-  const handleFileChange = (
-    fileOrEvent: File | React.ChangeEvent<HTMLInputElement>
-  ) => {
-    setError(null);
-    let selectedFile: File | null = null;
+  const handleFileChange = useCallback(
+    (fileOrEvent: File | React.ChangeEvent<HTMLInputElement>) => {
+      setError(null);
+      let selectedFile: File | null = null;
 
-    if (fileOrEvent instanceof File) {
-      selectedFile = fileOrEvent;
-    } else if (fileOrEvent.target.files?.[0]) {
-      selectedFile = fileOrEvent.target.files[0];
-    }
+      if (fileOrEvent instanceof File) {
+        selectedFile = fileOrEvent;
+      } else if (fileOrEvent.target.files?.[0]) {
+        selectedFile = fileOrEvent.target.files[0];
+      }
 
-    if (!selectedFile) return;
+      if (!selectedFile) return;
 
-    // Validate file type
-    if (!selectedFile.type.startsWith("image/")) {
-      const errorMsg = "Only image files are allowed (JPG, PNG, GIF, etc.)";
-      setError(errorMsg);
-      toast.error(errorMsg, toastConfig.error);
-      return;
-    }
+      // Validate file type
+      if (!selectedFile.type.startsWith("image/")) {
+        const errorMsg = "Only image files are allowed (JPG, PNG, GIF, etc.)";
+        setError(errorMsg);
+        toast.error(errorMsg, toastConfig.error);
+        return;
+      }
 
-    // Validate file size
-    if (selectedFile.size > 10 * 1024 * 1024) {
-      const errorMsg = "File size must be less than 10MB";
-      setError(errorMsg);
-      toast.error(errorMsg, toastConfig.error);
-      return;
-    }
+      // Validate file size (10MB)
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        const errorMsg = "File size must be less than 10MB";
+        setError(errorMsg);
+        toast.error(errorMsg, toastConfig.error);
+        return;
+      }
 
-    setFile(selectedFile);
+      setFile(selectedFile);
+      toast.success(`🖼️ Image "${selectedFile.name}" selected successfully`, {
+        ...toastConfig.success,
+        duration: 2000,
+      });
 
-    // Show success message
-    toast.success(`Image "${selectedFile.name}" selected successfully`, {
-      ...toastConfig.success,
-      duration: 2000,
-      icon: "🖼️",
-    });
-
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = () => setPreview(reader.result as string);
-    reader.readAsDataURL(selectedFile);
-  };
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = () => setPreview(reader.result as string);
+      reader.readAsDataURL(selectedFile);
+    },
+    []
+  );
 
   const uploadToIPFS = async (file: File): Promise<string> => {
-    const uploadToastId = toast.loading(
-      "Uploading image to IPFS...",
-      toastConfig.loading
-    );
-
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -249,23 +288,11 @@ const EventForm = () => {
         throw new Error("Failed to upload image to IPFS");
       }
 
-      const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${response.data.IpfsHash}`;
-
-      toast.success("Image uploaded to IPFS successfully", {
-        ...toastConfig.success,
-        id: uploadToastId,
-      });
-
-      return ipfsUrl;
+      const ipfsHash = response.data.IpfsHash;
+      return ipfsHash;
     } catch (error: any) {
       console.error("IPFS upload error:", error);
-
-      toast.error("Failed to upload image. Please try again.", {
-        ...toastConfig.error,
-        id: uploadToastId,
-      });
-
-      throw error;
+      throw new Error("Failed to upload image to IPFS");
     }
   };
 
@@ -291,33 +318,41 @@ const EventForm = () => {
     if (!validateForm()) return;
 
     // Check wallet connection
-    if (!address || !walletClient) {
-      showWalletPrompt();
+    if (!isConnected || !address) {
+      toast.error(
+        "🔌 Please connect your wallet to continue",
+        toastConfig.error
+      );
       return;
     }
 
     const mainToastId = toast.loading(
-      "Preparing your event...",
+      "⏳ Preparing your event...",
       toastConfig.loading
     );
 
     try {
-      setLoading(true);
-
       // Step 1: Upload image to IPFS
       toast.loading("📤 Uploading image to IPFS...", {
         ...toastConfig.loading,
         id: mainToastId,
       });
 
-      const imageUrl = await uploadToIPFS(file!);
-      const ipfsHash = imageUrl.split("/").pop() || "";
+      const ipfsHash = await uploadToIPFS(file!);
+
+      toast.success("✅ Image uploaded to IPFS!", {
+        ...toastConfig.success,
+        id: mainToastId,
+        duration: 2000,
+      });
 
       // Step 2: Prepare transaction data
-      toast.loading("📝 Preparing transaction data...", {
-        ...toastConfig.loading,
-        id: mainToastId,
-      });
+      setTimeout(() => {
+        toast.loading("📝 Preparing transaction data...", {
+          ...toastConfig.loading,
+          id: mainToastId,
+        });
+      }, 500);
 
       const startDateTime = new Date(
         `${eventData.startDate}T${eventData.startTime}`
@@ -335,145 +370,106 @@ const EventForm = () => {
       );
 
       const priceInWei = parseUnits(eventData.ticketPrice, 18);
-
       const maxCapacity = BigInt(eventData.maxCapacity);
-
-      // Convert refund policy to enum value (0, 1, or 2)
       const refundPolicy = BigInt(eventData.refundPolicy || "1");
 
-      // Convert refund buffer hours (0 for other policies)
       let refundBufferHours = BigInt(0);
       if (eventData.refundPolicy === "2" && eventData.refundBufferHours) {
         refundBufferHours = BigInt(eventData.refundBufferHours);
       }
 
-      // Encode contract function call
-      transfer.mutate({
-        address: CONTRACT_ADDRESS,
-        abi: contractABI.abi,
-        functionName: "createEvent",
-        args: [
-          eventData.eventName,
-          ipfsHash,
-          eventData.eventDetails,
-          startDate,
-          endDate,
-          startTime,
-          endTime,
-          eventData.eventLocation,
-          priceInWei,
-          minimumAge,
-          maxCapacity,
-          refundPolicy,
-          refundBufferHours,
-        ],
-      });
-
       // Step 3: Send transaction
-      toast.loading("🔐 Please confirm transaction in your wallet...", {
-        ...toastConfig.loading,
-        id: mainToastId,
-      });
-
-      // Step 4: Wait for confirmation
-      toast.loading("⏳ Waiting for blockchain confirmation...", {
-        ...toastConfig.loading,
-        id: mainToastId,
-      });
-
-      // Success!
-      toast.success(`🎉 Event "${eventData.eventName}" created successfully!`, {
-        ...toastConfig.success,
-        id: mainToastId,
-        duration: 5000,
-      });
-
-      // Show additional info toast
       setTimeout(() => {
-        toast.success("Redirecting to events page...", {
-          ...toastConfig.info,
-          duration: 2000,
+        toast.loading("🔐 Please confirm transaction in your wallet...", {
+          ...toastConfig.loading,
+          id: mainToastId,
         });
       }, 1000);
 
-      setEventData({
-        eventName: "",
-        eventDetails: "",
-        startDate: "",
-        endDate: "",
-        startTime: "",
-        endTime: "",
-        eventLocation: "",
-        ticketPrice: "",
-        minimumAge: "0",
-        maxCapacity: "",
-        refundPolicy: "1",
-        refundBufferHours: "",
-        image: "",
-      });
+      createEventWrite.mutate(
+        {
+          address: CONTRACT_ADDRESS,
+          abi: contractABI.abi,
+          functionName: "createEvent",
+          args: [
+            eventData.eventName,
+            ipfsHash,
+            eventData.eventDetails,
+            startDate,
+            endDate,
+            startTime,
+            endTime,
+            eventData.eventLocation,
+            priceInWei,
+            minimumAge,
+            maxCapacity,
+            refundPolicy,
+            refundBufferHours,
+          ],
+        },
+        {
+          onSuccess: () => {
+            toast.loading(
+              "⛓️ Transaction submitted! Waiting for confirmation...",
+              {
+                ...toastConfig.loading,
+                id: mainToastId,
+              }
+            );
+          },
+          onError: (error: any) => {
+            console.error("Event creation failed:", error);
 
-      setFile(null);
-      setPreview(null);
+            let errorMessage = "Failed to create event";
 
-      // Redirect after delay
-      setTimeout(() => {
-        // router.push("/view_events");
-      }, 2000);
+            if (
+              error.message?.includes("User rejected") ||
+              error.message?.includes("user rejected")
+            ) {
+              errorMessage = "❌ Transaction was rejected";
+              toast.error(errorMessage, {
+                ...toastConfig.error,
+                id: mainToastId,
+              });
+            } else if (error.message?.includes("insufficient funds")) {
+              errorMessage = "💸 Insufficient funds for gas fees";
+              toast.error(errorMessage, {
+                ...toastConfig.error,
+                id: mainToastId,
+              });
+            } else {
+              errorMessage =
+                error.shortMessage || error.message || "Unknown error occurred";
+              toast.error(`❌ ${errorMessage}`, {
+                ...toastConfig.error,
+                id: mainToastId,
+              });
+            }
+          },
+        }
+      );
     } catch (error: any) {
       console.error("Event creation failed:", error);
 
       let errorMessage = "Failed to create event";
 
-      // Parse different error types
-      if (error.message?.includes("User rejected")) {
-        errorMessage = "Transaction was rejected";
-        toast.error(errorMessage, {
-          ...toastConfig.warning,
-          id: mainToastId,
-        });
-      } else if (error.message?.includes("insufficient funds")) {
-        errorMessage = "Insufficient funds for gas fees";
-        toast.error(errorMessage, {
-          ...toastConfig.error,
-          id: mainToastId,
-        });
-      } else if (error.message?.includes("IPFS")) {
+      if (error.message?.includes("IPFS")) {
         errorMessage = "Failed to upload image. Please try again.";
-        toast.error(errorMessage, {
-          ...toastConfig.error,
-          id: mainToastId,
-        });
       } else {
-        errorMessage =
-          error.shortMessage || error.message || "Unknown error occurred";
-        toast.error(errorMessage, {
-          ...toastConfig.error,
-          id: mainToastId,
-        });
+        errorMessage = error.message || "Unknown error occurred";
       }
 
-      // Show support message for persistent errors
-      if (error.message && !error.message.includes("rejected")) {
-        setTimeout(() => {
-          toast.error("Need help? Contact support with your error details", {
-            ...toastConfig.info,
-            duration: 4000,
-          });
-        }, 1000);
-      }
-    } finally {
-      setLoading(false);
+      toast.error(`❌ ${errorMessage}`, {
+        ...toastConfig.error,
+        id: mainToastId,
+      });
     }
   };
 
-  const { isLoading: isConfirming, isSuccess: isConfirmed } =
-    useWaitForTransactionReceipt({
-      hash,
-    });
-  console.log("eventData", eventData);
   return (
     <>
-      <div className="max-w-2xl mx-auto  p-6 rounded-lg my-20">
+      <Toaster position="top-right" />
+      <div className="max-w-2xl mx-auto p-6 rounded-lg my-20">
         <h2 className="text-2xl font-semibold text-gray-800 mb-4 text-center">
           Create Your Event
         </h2>
@@ -487,22 +483,13 @@ const EventForm = () => {
           setPreview={setPreview}
           error={error}
           setError={setError}
-          errors={errors}
           handleFileChange={handleFileChange}
           handleDrop={handleDrop}
           handleDragOver={handleDragOver}
           createEvent={createEvent}
-          loading={loading}
+          errors={errors}
+          loading={createEventWrite.isPending || isConfirming}
         />
-
-        {hash && <div>Transaction Hash: {hash}</div>}
-        {isConfirming && <div>Waiting for confirmation...</div>}
-        {isConfirmed && <div>Transaction confirmed.</div>}
-        {error1 && (
-          <div>
-            Error: {(error1 as BaseError).shortMessage || error1.message}
-          </div>
-        )}
       </div>
     </>
   );
