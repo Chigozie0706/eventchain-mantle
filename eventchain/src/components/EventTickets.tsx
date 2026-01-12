@@ -334,7 +334,6 @@ export default function EventTickets() {
 
     const now = Date.now() / 1000; // Current time in seconds
 
-    // FIXED: Compare with startDate and endDate (full timestamps), not startTime/endTime
     if (now < event.startDate)
       return {
         text: "Upcoming",
@@ -415,6 +414,13 @@ export default function EventTickets() {
     return `${displayHours}:${minutes.toString().padStart(2, "0")} ${period}`;
   };
 
+  const getImageUrl = (event: Event) => {
+    if (!event.eventCardImgUrl) return "/default-event.jpg";
+    return event.eventCardImgUrl.startsWith("http")
+      ? event.eventCardImgUrl
+      : `https://ipfs.io/ipfs/${event.eventCardImgUrl}`;
+  };
+
   if (!isConnected) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-6">
@@ -462,12 +468,6 @@ export default function EventTickets() {
             <p className="text-gray-600 text-lg">
               Manage tickets and process refunds with pull payment
             </p>
-          </div>
-          <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-xl shadow-md border border-gray-200">
-            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-sm font-semibold text-gray-700">
-              Wallet Connected
-            </span>
           </div>
         </div>
 
@@ -538,7 +538,7 @@ export default function EventTickets() {
                     {/* Event Image */}
                     <div className="lg:w-80 h-56 lg:h-auto bg-gradient-to-br from-indigo-100 to-purple-100 flex-shrink-0 relative overflow-hidden">
                       <img
-                        src={event.eventCardImgUrl}
+                        src={getImageUrl(event)}
                         alt={event.eventName}
                         className="w-full h-full object-cover"
                         onError={(e) => {

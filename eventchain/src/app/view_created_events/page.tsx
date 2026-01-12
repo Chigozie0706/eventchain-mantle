@@ -5,12 +5,10 @@ import {
   useReadContract,
   useWriteContract,
   useConnection,
-  useWaitForTransactionReceipt,
   useBlockNumber,
-  useWalletClient,
 } from "wagmi";
 import contractABI from "contract/eventchainAbi.json";
-import { toast } from "react-hot-toast";
+import { toast, Toaster } from "react-hot-toast";
 import { ethers } from "ethers";
 import { AlertCircle, RefreshCw, Users, Wallet } from "lucide-react";
 
@@ -43,20 +41,64 @@ enum RefundPolicy {
   CUSTOM_BUFFER = 2,
 }
 
-const REFUND_POLICY_LABELS = {
-  [RefundPolicy.NO_REFUND]: "No Refunds",
-  [RefundPolicy.REFUND_BEFORE_START]: "Refund Before Start",
-  [RefundPolicy.CUSTOM_BUFFER]: "Custom Buffer",
-};
-
 const CONTRACT_ADDRESS = "0x36faD67F403546f6c2947579a27d03bDAfe77d1a";
+
+// Sweet toast configurations
+const toastConfig = {
+  success: {
+    duration: 4000,
+    icon: "✅",
+    style: {
+      background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+      color: "#fff",
+      fontWeight: "600",
+      padding: "16px 24px",
+      borderRadius: "12px",
+      boxShadow: "0 10px 25px rgba(16, 185, 129, 0.3)",
+    },
+  },
+  error: {
+    duration: 5000,
+    icon: "❌",
+    style: {
+      background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+      color: "#fff",
+      fontWeight: "600",
+      padding: "16px 24px",
+      borderRadius: "12px",
+      boxShadow: "0 10px 25px rgba(239, 68, 68, 0.3)",
+    },
+  },
+  loading: {
+    icon: "⏳",
+    style: {
+      background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+      color: "#fff",
+      fontWeight: "600",
+      padding: "16px 24px",
+      borderRadius: "12px",
+      boxShadow: "0 10px 25px rgba(59, 130, 246, 0.3)",
+    },
+  },
+  info: {
+    duration: 3000,
+    icon: "ℹ️",
+    style: {
+      background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
+      color: "#fff",
+      fontWeight: "600",
+      padding: "16px 24px",
+      borderRadius: "12px",
+      boxShadow: "0 10px 25px rgba(99, 102, 241, 0.3)",
+    },
+  },
+};
 
 export default function MyEvents() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { writeContractAsync } = useWriteContract();
-  const { address: connectedAddress } = useConnection();
+  const { address: connectedAddress, isConnected } = useConnection(); // v3: useAccount renamed to useConnection
   const [cancelingId, setCancelingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [claimingId, setClaimingId] = useState<number | null>(null);
@@ -64,19 +106,14 @@ export default function MyEvents() {
     "all"
   );
   const [pendingWithdrawal, setPendingWithdrawal] = useState(0);
-  const cancelEventWrirte = useWriteContract();
-  const claimFundsWrite = useWriteContract();
-  const deleteEventWrite = useWriteContract();
-  const handleWithdrawWrite = useWriteContract();
 
-  const { data: walletClient } = useWalletClient();
+  // v3: Separate hooks instead of destructuring
+  const cancelEvent = useWriteContract();
+  const claimFunds = useWriteContract();
+  const deleteEvent = useWriteContract();
+  const handleWithdraw = useWriteContract();
 
-  // Add this hook for transaction tracking
-  const { data: hash, isPending: isWriting } = useWriteContract();
   const { data: blockNumber } = useBlockNumber({ watch: true });
-
-  const { isLoading: isConfirming, isSuccess: isConfirmed } =
-    useWaitForTransactionReceipt({ hash });
 
   const {
     data,
@@ -91,6 +128,23 @@ export default function MyEvents() {
     functionName: "getActiveEventsByCreator",
     account: connectedAddress,
   });
+
+  // Read pending withdrawal
+  const { data: pendingWithdrawalData, refetch: refetchPendingWithdrawal } =
+    useReadContract({
+      address: CONTRACT_ADDRESS,
+      abi: contractABI.abi,
+      functionName: "getPendingWithdrawal",
+      args: [connectedAddress],
+    });
+
+  // Update pending withdrawal
+  useEffect(() => {
+    if (pendingWithdrawalData) {
+      const withdrawal = Number(pendingWithdrawalData) / 1e18;
+      setPendingWithdrawal(withdrawal);
+    }
+  }, [pendingWithdrawalData]);
 
   useEffect(() => {
     if (isLoading) {
@@ -109,17 +163,13 @@ export default function MyEvents() {
         timestamp: new Date().toISOString(),
       });
       setError("Failed to load your events");
+      toast.error("Failed to load your events", toastConfig.error);
     }
   }, [isError, contractError]);
 
   useEffect(() => {
     if (isSuccess && data) {
       try {
-        console.log(" Raw creator events data received:", {
-          data,
-          timestamp: new Date().toISOString(),
-        });
-
         if (!Array.isArray(data) || data.length !== 2) {
           throw new Error("Unexpected data format from contract");
         }
@@ -142,11 +192,11 @@ export default function MyEvents() {
           fundsHeld: Number(ethers.formatUnits(event.fundsHeld, 18)),
           isCanceled: event.isCanceled,
           fundsReleased: event.fundsReleased,
-          minimumAge: event.minimumAge,
-          maxCapacity: event.maxCapacity,
+          minimumAge: Number(event.minimumAge),
+          maxCapacity: Number(event.maxCapacity),
           exists: event.exists,
-          refundPolicy: event.refundPolicy,
-          refundBufferHours: event.refundBufferHours,
+          refundPolicy: Number(event.refundPolicy),
+          refundBufferHours: Number(event.refundBufferHours),
         }));
 
         setEvents(formattedEvents);
@@ -158,142 +208,268 @@ export default function MyEvents() {
           timestamp: new Date().toISOString(),
         });
         setError("Error processing your event data");
+        toast.error("Error processing event data", toastConfig.error);
       }
     }
   }, [isSuccess, data]);
 
-  // Auto-refresh when block number changes (new blocks mean state might have changed)
+  // Auto-refresh when block number changes
   useEffect(() => {
-    refetch();
-  }, [blockNumber, refetch]);
+    if (blockNumber) {
+      refetch();
+      refetchPendingWithdrawal();
+    }
+  }, [blockNumber, refetch, refetchPendingWithdrawal]);
 
-  const cancelEvent = useCallback(
+  const handleCancelEvent = useCallback(
     async (eventId: number) => {
-      console.log("[Cancel] Starting event cancellation process");
-
-      if (!connectedAddress || !walletClient) {
-        console.log("[Cancel] Wallet not connected - aborting");
-        toast.error("Please connect your wallet first");
+      if (!isConnected || !connectedAddress) {
+        toast.error("🔌 Please connect your wallet first", toastConfig.error);
         return;
       }
 
       setCancelingId(eventId);
-      const toastId = toast.loading("Preparing cancellation...");
+      const toastId = toast.loading(
+        "⏳ Preparing to cancel event...",
+        toastConfig.loading
+      );
 
       try {
-        toast.loading("Waiting for wallet confirmation...", { id: toastId });
-        cancelEventWrirte.mutate({
-          address: CONTRACT_ADDRESS,
-          abi: contractABI.abi,
-          functionName: "buyTicket",
-          args: [eventId],
-        });
+        cancelEvent.mutate(
+          {
+            address: CONTRACT_ADDRESS,
+            abi: contractABI.abi,
+            functionName: "cancelEvent",
+            args: [BigInt(eventId)],
+          },
+          {
+            onSuccess: async () => {
+              toast.dismiss(toastId);
+              toast.success(
+                "🎯 Event cancelled successfully!",
+                toastConfig.success
+              );
 
-        // Force a refresh after a short delay to account for block confirmation
-        setTimeout(() => {
-          refetch();
-        }, 5000);
+              await refetch();
+              await refetchPendingWithdrawal();
+
+              setTimeout(() => {
+                toast.success(
+                  "✅ Refunds will be processed for attendees",
+                  toastConfig.info
+                );
+              }, 1000);
+            },
+            onError: (error: any) => {
+              console.error("Cancel event error:", error);
+              toast.dismiss(toastId);
+              const errorMsg =
+                error?.shortMessage ||
+                error?.message ||
+                "Failed to cancel event";
+              toast.error(`❌ ${errorMsg}`, toastConfig.error);
+            },
+            onSettled: () => {
+              setCancelingId(null);
+            },
+          }
+        );
       } catch (error: any) {
-        console.error("[Cancel] Transaction failed:", {
-          error: error.message,
-          stack: error.stack,
-        });
-        toast.error(error.message || "Failed to cancel event");
-      } finally {
+        console.error("Cancel event error:", error);
+        toast.dismiss(toastId);
+        toast.error(
+          `❌ ${error?.message || "Failed to cancel event"}`,
+          toastConfig.error
+        );
         setCancelingId(null);
       }
     },
-    [connectedAddress, walletClient, refetch]
+    [
+      isConnected,
+      connectedAddress,
+      cancelEvent,
+      refetch,
+      refetchPendingWithdrawal,
+    ]
   );
 
-  const deleteEvent = async (eventId: number) => {
-    const toastId = toast.loading("Deleting event...");
-    try {
-      deleteEventWrite.mutate({
-        address: CONTRACT_ADDRESS,
-        abi: contractABI.abi,
-        functionName: "buyTicket",
-        args: [eventId],
-      });
-
-      toast.dismiss(toastId);
-      toast.success("Event deleted successfully!");
-
-      console.log(`🗑️ Event ${eventId} deleted. Refreshing events...`);
-      await refetch();
-    } catch (error) {
-      console.error("🚨 Error deleting event:", {
-        error,
-        eventId,
-        timestamp: new Date().toISOString(),
-      });
-
-      toast.dismiss(toastId);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to delete event"
-      );
-    }
-  };
-
-  const claimFunds = useCallback(
+  const handleDeleteEvent = useCallback(
     async (eventId: number) => {
-      console.log("[Claim] Starting claim process");
+      if (!isConnected || !connectedAddress) {
+        toast.error("🔌 Please connect your wallet first", toastConfig.error);
+        return;
+      }
 
-      if (!connectedAddress || !walletClient) {
-        toast.error("Please connect your wallet first");
+      setDeletingId(eventId);
+      const toastId = toast.loading(
+        "⏳ Deleting event...",
+        toastConfig.loading
+      );
+
+      try {
+        deleteEvent.mutate(
+          {
+            address: CONTRACT_ADDRESS,
+            abi: contractABI.abi,
+            functionName: "deleteEvent",
+            args: [BigInt(eventId)],
+          },
+          {
+            onSuccess: async () => {
+              toast.dismiss(toastId);
+              toast.success(
+                "🗑️ Event deleted successfully!",
+                toastConfig.success
+              );
+
+              await refetch();
+            },
+            onError: (error: any) => {
+              console.error("Delete event error:", error);
+              toast.dismiss(toastId);
+              const errorMsg =
+                error?.shortMessage ||
+                error?.message ||
+                "Failed to delete event";
+              toast.error(`❌ ${errorMsg}`, toastConfig.error);
+            },
+            onSettled: () => {
+              setDeletingId(null);
+            },
+          }
+        );
+      } catch (error: any) {
+        console.error("Delete event error:", error);
+        toast.dismiss(toastId);
+        toast.error(
+          `❌ ${error?.message || "Failed to delete event"}`,
+          toastConfig.error
+        );
+        setDeletingId(null);
+      }
+    },
+    [isConnected, connectedAddress, deleteEvent, refetch]
+  );
+
+  const handleClaimFunds = useCallback(
+    async (eventId: number) => {
+      if (!isConnected || !connectedAddress) {
+        toast.error("🔌 Please connect your wallet first", toastConfig.error);
         return;
       }
 
       setClaimingId(eventId);
-      const toastId = toast.loading("Preparing claim...");
+      const toastId = toast.loading(
+        "⏳ Claiming event funds...",
+        toastConfig.loading
+      );
 
       try {
-        toast.loading("Waiting for wallet confirmation...", { id: toastId });
-        claimFundsWrite.mutate({
-          address: CONTRACT_ADDRESS,
-          abi: contractABI.abi,
-          functionName: "buyTicket",
-          args: [eventId],
-        });
-        setTimeout(() => {
-          refetch();
-        }, 5000);
+        claimFunds.mutate(
+          {
+            address: CONTRACT_ADDRESS,
+            abi: contractABI.abi,
+            functionName: "releaseFunds",
+            args: [BigInt(eventId)],
+          },
+          {
+            onSuccess: async () => {
+              toast.dismiss(toastId);
+              toast.success(
+                "💰 Funds claimed successfully!",
+                toastConfig.success
+              );
+
+              await refetch();
+              await refetchPendingWithdrawal();
+
+              setTimeout(() => {
+                toast.success(
+                  "✅ Funds added to pending withdrawal",
+                  toastConfig.info
+                );
+              }, 1000);
+            },
+            onError: (error: any) => {
+              console.error("Claim funds error:", error);
+              toast.dismiss(toastId);
+              const errorMsg =
+                error?.shortMessage ||
+                error?.message ||
+                "Failed to claim funds";
+              toast.error(`❌ ${errorMsg}`, toastConfig.error);
+            },
+            onSettled: () => {
+              setClaimingId(null);
+            },
+          }
+        );
       } catch (error: any) {
-        console.error("[Claim] Transaction failed:", error);
-        toast.error(error.message || "Failed to claim funds");
-      } finally {
+        console.error("Claim funds error:", error);
+        toast.dismiss(toastId);
+        toast.error(
+          `❌ ${error?.message || "Failed to claim funds"}`,
+          toastConfig.error
+        );
         setClaimingId(null);
       }
     },
-    [connectedAddress, walletClient, refetch]
+    [
+      isConnected,
+      connectedAddress,
+      claimFunds,
+      refetch,
+      refetchPendingWithdrawal,
+    ]
   );
 
-  const handleWithdraw = useCallback(async () => {
-    console.log("[Claim] Starting claim process");
-
-    if (!connectedAddress || !walletClient) {
-      toast.error("Please connect your wallet first");
+  const handleWithdrawFunds = useCallback(async () => {
+    if (!isConnected || !connectedAddress) {
+      toast.error("🔌 Please connect your wallet first", toastConfig.error);
       return;
     }
-    const toastId = toast.loading("Preparing claim...");
+
+    const toastId = toast.loading(
+      "⏳ Withdrawing funds...",
+      toastConfig.loading
+    );
 
     try {
-      toast.loading("Waiting for wallet confirmation...", { id: toastId });
-      handleWithdrawWrite.mutate({
-        address: CONTRACT_ADDRESS,
-        abi: contractABI.abi,
-        functionName: "buyTicket",
-      });
-      setTimeout(() => {
-        refetch();
-      }, 5000);
+      handleWithdraw.mutate(
+        {
+          address: CONTRACT_ADDRESS,
+          abi: contractABI.abi,
+          functionName: "withdraw",
+        },
+        {
+          onSuccess: async () => {
+            toast.dismiss(toastId);
+            toast.success("💸 Withdrawal successful!", toastConfig.success);
+
+            await refetchPendingWithdrawal();
+
+            setTimeout(() => {
+              toast.success("✅ Funds sent to your wallet", toastConfig.info);
+            }, 1000);
+          },
+          onError: (error: any) => {
+            console.error("Withdrawal error:", error);
+            toast.dismiss(toastId);
+            const errorMsg =
+              error?.shortMessage || error?.message || "Withdrawal failed";
+            toast.error(`❌ ${errorMsg}`, toastConfig.error);
+          },
+        }
+      );
     } catch (error: any) {
-      console.error("[Claim] Transaction failed:", error);
-      toast.error(error.message || "Failed to claim funds");
-    } finally {
-      setClaimingId(null);
+      console.error("Withdrawal error:", error);
+      toast.dismiss(toastId);
+      toast.error(
+        `❌ ${error?.message || "Withdrawal failed"}`,
+        toastConfig.error
+      );
     }
-  }, [connectedAddress, walletClient, refetch]);
+  }, [isConnected, connectedAddress, handleWithdraw, refetchPendingWithdrawal]);
 
   const filteredEvents = events.filter((event) => {
     if (filter === "all") return true;
@@ -316,6 +492,7 @@ export default function MyEvents() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 pt-20 px-4">
+        <Toaster position="top-right" />
         <div className="max-w-7xl mx-auto text-center">
           <RefreshCw
             size={48}
@@ -330,6 +507,7 @@ export default function MyEvents() {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 pt-20 px-4">
+        <Toaster position="top-right" />
         <div className="max-w-7xl mx-auto">
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-8 text-center">
             <AlertCircle size={48} className="text-red-500 mx-auto mb-4" />
@@ -337,6 +515,15 @@ export default function MyEvents() {
               Error Loading Events
             </h3>
             <p className="text-red-700">{error}</p>
+            <button
+              onClick={() => {
+                setError(null);
+                refetch();
+              }}
+              className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+            >
+              Retry
+            </button>
           </div>
         </div>
       </div>
@@ -345,6 +532,7 @@ export default function MyEvents() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 pt-20 px-4 pb-12">
+      <Toaster position="top-right" />
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8 flex justify-between items-start">
@@ -358,11 +546,21 @@ export default function MyEvents() {
           {/* Pending Withdrawal */}
           {pendingWithdrawal > 0 && (
             <button
-              onClick={handleWithdraw}
-              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+              onClick={handleWithdrawFunds}
+              disabled={handleWithdraw.isPending}
+              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50"
             >
-              <Wallet size={20} />
-              Withdraw {pendingWithdrawal.toFixed(2)} MNT
+              {handleWithdraw.isPending ? (
+                <>
+                  <RefreshCw size={20} className="animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Wallet size={20} />
+                  Withdraw {pendingWithdrawal.toFixed(2)} MNT
+                </>
+              )}
             </button>
           )}
         </div>
@@ -417,17 +615,14 @@ export default function MyEvents() {
               <CreatorEventCard
                 key={event.index}
                 event={event}
-                onCancel={cancelEvent}
-                onClaim={claimFunds}
-                onDelete={deleteEvent}
-                onWithdraw={handleWithdraw}
+                onCancel={handleCancelEvent}
+                onClaim={handleClaimFunds}
+                onDelete={handleDeleteEvent}
+                onWithdraw={handleWithdrawFunds}
                 cancelLoading={cancelingId === event.index}
                 claimLoading={claimingId === event.index}
                 deleteLoading={deletingId === event.index}
-                attendeeCount={
-                  // attendeeCounts[event.index as keyof typeof attendeeCounts] ||
-                  0
-                }
+                attendeeCount={0}
               />
             ))}
           </div>

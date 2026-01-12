@@ -2,7 +2,6 @@ import {
   Calendar,
   CheckCircle,
   Clock,
-  DollarSign,
   MapPin,
   RefreshCw,
   Shield,
@@ -81,12 +80,13 @@ const CreatorEventCard = ({
     });
   };
 
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
+  // FIXED: Format time from seconds since midnight, not timestamp
+  const formatTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const period = hours >= 12 ? "PM" : "AM";
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes.toString().padStart(2, "0")} ${period}`;
   };
 
   const isEventEnded = event.endDate < Math.floor(Date.now() / 1000);

@@ -121,7 +121,7 @@ export default function EventCard({ event }: { event: Event }) {
         </div>
 
         {/* Event Name */}
-        <h3 className="text-lg font-bold text-gray-900 line-clamp-2 leading-snug min-h-[1.5rem]">
+        <h3 className="text-lg font-bold text-gray-900 line-clamp-2 leading-snug min-h-[3.5rem] ">
           {event.eventName}
         </h3>
 
