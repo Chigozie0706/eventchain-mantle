@@ -73,7 +73,6 @@ const EventForm = () => {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [errors, setErrors] = useState("");
   const { address, isConnected } = useConnection();
 
   const createEventWrite = useWriteContract();
@@ -127,7 +126,7 @@ const EventForm = () => {
       setFile(null);
       setPreview(null);
 
-      // Redirect after delay - FIXED: Navigation is now enabled
+      // Redirect after delay
       setTimeout(() => {
         toast.success("✅ Redirecting to events page...", toastConfig.info);
         router.push("/view_events");
@@ -137,27 +136,38 @@ const EventForm = () => {
 
   const validateForm = () => {
     try {
-      // Check required fields
-      if (
-        !eventData.eventName ||
-        !eventData.eventDetails ||
-        !eventData.startDate ||
-        !eventData.endDate ||
-        !eventData.startTime ||
-        !eventData.endTime ||
-        !eventData.eventLocation ||
-        !eventData.ticketPrice ||
-        !eventData.maxCapacity
-      ) {
-        throw new Error("Please fill in all required fields");
+      // Step 1: Event Details validation
+      if (!eventData.eventName.trim()) {
+        throw new Error("Please enter an event name");
       }
 
-      // Check if image is uploaded
+      if (!eventData.eventDetails.trim()) {
+        throw new Error("Please provide event details");
+      }
+
       if (!file) {
         throw new Error("Please upload an event image");
       }
 
-      // Validate dates
+      const minAge = parseInt(eventData.minimumAge);
+      if (isNaN(minAge) || minAge < 0 || minAge > 120) {
+        throw new Error("Please enter a valid minimum age (0-120)");
+      }
+
+      // Step 2: Location validation
+      if (!eventData.eventLocation.trim()) {
+        throw new Error("Please enter event location");
+      }
+
+      // Step 3: Date & Time validation
+      if (!eventData.startDate || !eventData.startTime) {
+        throw new Error("Please select start date and time");
+      }
+
+      if (!eventData.endDate || !eventData.endTime) {
+        throw new Error("Please select end date and time");
+      }
+
       const startDateTime = new Date(
         `${eventData.startDate}T${eventData.startTime}`
       );
@@ -184,14 +194,26 @@ const EventForm = () => {
         throw new Error("Event duration cannot exceed 365 days");
       }
 
-      // Validate price
-      const price = parseFloat(eventData.ticketPrice);
-      if (isNaN(price))
-        throw new Error("Please enter a valid number for price");
-      if (price < 0) throw new Error("Price cannot be negative");
-      if (price > 1000000) throw new Error("Price seems unusually high");
+      // Step 4: Tickets & Capacity validation
+      if (!eventData.ticketPrice) {
+        throw new Error("Please enter ticket price");
+      }
 
-      // Validate capacity
+      const price = parseFloat(eventData.ticketPrice);
+      if (isNaN(price)) {
+        throw new Error("Please enter a valid number for price");
+      }
+      if (price < 0) {
+        throw new Error("Price cannot be negative");
+      }
+      if (price > 1000000) {
+        throw new Error("Price seems unusually high");
+      }
+
+      if (!eventData.maxCapacity) {
+        throw new Error("Please enter max capacity");
+      }
+
       const capacity = parseInt(eventData.maxCapacity);
       if (isNaN(capacity) || capacity <= 0) {
         throw new Error("Please enter a valid capacity greater than 0");
@@ -200,17 +222,24 @@ const EventForm = () => {
         throw new Error("Capacity cannot exceed 100,000");
       }
 
-      // Validate age
-      const minAge = parseInt(eventData.minimumAge);
-      if (isNaN(minAge) || minAge < 0 || minAge > 120) {
-        throw new Error("Please enter a valid minimum age (0-120)");
-      }
-
       // Validate refund buffer if custom policy
       if (eventData.refundPolicy === "2") {
+        if (!eventData.refundBufferHours) {
+          throw new Error("Please enter refund buffer hours");
+        }
+
         const bufferHours = parseInt(eventData.refundBufferHours);
-        if (isNaN(bufferHours) || bufferHours <= 0 || bufferHours > 720) {
-          throw new Error("Refund buffer hours must be between 1 and 720");
+        if (isNaN(bufferHours) || bufferHours <= 0) {
+          throw new Error("Refund buffer must be greater than 0");
+        }
+        if (bufferHours > 720) {
+          throw new Error("Refund buffer cannot exceed 720 hours (30 days)");
+        }
+
+        // Check if buffer exceeds time until event
+        const hoursUntilEvent = durationMs / (1000 * 60 * 60);
+        if (bufferHours >= hoursUntilEvent) {
+          throw new Error("Refund buffer exceeds time until event starts");
         }
       }
 
@@ -487,7 +516,6 @@ const EventForm = () => {
           handleDrop={handleDrop}
           handleDragOver={handleDragOver}
           createEvent={createEvent}
-          errors={errors}
           loading={createEventWrite.isPending || isConfirming}
         />
       </div>

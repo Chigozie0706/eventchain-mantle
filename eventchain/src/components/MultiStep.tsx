@@ -15,7 +15,6 @@ interface MultiStepProps {
   loading: boolean;
   setPreview: React.Dispatch<React.SetStateAction<string | null>>;
   error: string | null;
-  errors: string | null;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleDrop: (e: React.DragEvent<HTMLDivElement>) => void;
@@ -51,7 +50,7 @@ export default function MultiStep({
   const [isAnimating, setIsAnimating] = useState(false);
 
   const totalSteps = 4;
-  const labels = ["Event Details", "Location", "Tickets", "Date & Time"];
+  const labels = ["Event Details", "Location", "Date & Time", "Tickets"];
 
   // Validation rules per step
   const validateStep = (step: number) => {
@@ -146,6 +145,18 @@ export default function MultiStep({
       case 3:
         return (
           <div className={contentClass}>
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">
+              Date & Time
+            </h2>
+            <div className="space-y-4">
+              <DateTime eventData={eventData} setEventData={setEventData} />
+            </div>
+          </div>
+        );
+
+      case 4:
+        return (
+          <div className={contentClass}>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">
               Tickets & Capacity
             </h2>
@@ -153,18 +164,6 @@ export default function MultiStep({
               Set pricing and capacity limits
             </p>
             <Tickets eventData={eventData} setEventData={setEventData} />
-          </div>
-        );
-
-      case 4:
-        return (
-          <div className={contentClass}>
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">
-              Date & Time
-            </h2>
-            <div className="space-y-4">
-              <DateTime eventData={eventData} setEventData={setEventData} />
-            </div>
           </div>
         );
 

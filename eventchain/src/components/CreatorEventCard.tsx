@@ -52,7 +52,6 @@ const CreatorEventCard = ({
   event,
   onCancel,
   onClaim,
-  onDelete,
   onWithdraw,
   cancelLoading,
   claimLoading,
@@ -62,7 +61,6 @@ const CreatorEventCard = ({
   event: Event;
   onCancel: (id: number) => void;
   onClaim: (id: number) => void;
-  onDelete: (id: number) => void;
   onWithdraw: () => void;
   cancelLoading: boolean;
   claimLoading: boolean;
@@ -151,19 +149,6 @@ const CreatorEventCard = ({
             )}
           </button>
         )}
-
-        <button
-          onClick={() => onDelete(event.index)}
-          disabled={deleteLoading}
-          className="bg-red-500 hover:bg-red-600 text-white p-2.5 rounded-full shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-110"
-          title="Delete event"
-        >
-          {deleteLoading ? (
-            <RefreshCw size={16} className="animate-spin" />
-          ) : (
-            <Trash2 size={16} />
-          )}
-        </button>
       </div>
 
       {/* Event Image */}

@@ -293,64 +293,6 @@ export default function MyEvents() {
     ]
   );
 
-  const handleDeleteEvent = useCallback(
-    async (eventId: number) => {
-      if (!isConnected || !connectedAddress) {
-        toast.error("🔌 Please connect your wallet first", toastConfig.error);
-        return;
-      }
-
-      setDeletingId(eventId);
-      const toastId = toast.loading(
-        "⏳ Deleting event...",
-        toastConfig.loading
-      );
-
-      try {
-        deleteEvent.mutate(
-          {
-            address: CONTRACT_ADDRESS,
-            abi: contractABI.abi,
-            functionName: "deleteEvent",
-            args: [BigInt(eventId)],
-          },
-          {
-            onSuccess: async () => {
-              toast.dismiss(toastId);
-              toast.success(
-                "🗑️ Event deleted successfully!",
-                toastConfig.success
-              );
-
-              await refetch();
-            },
-            onError: (error: any) => {
-              console.error("Delete event error:", error);
-              toast.dismiss(toastId);
-              const errorMsg =
-                error?.shortMessage ||
-                error?.message ||
-                "Failed to delete event";
-              toast.error(`❌ ${errorMsg}`, toastConfig.error);
-            },
-            onSettled: () => {
-              setDeletingId(null);
-            },
-          }
-        );
-      } catch (error: any) {
-        console.error("Delete event error:", error);
-        toast.dismiss(toastId);
-        toast.error(
-          `❌ ${error?.message || "Failed to delete event"}`,
-          toastConfig.error
-        );
-        setDeletingId(null);
-      }
-    },
-    [isConnected, connectedAddress, deleteEvent, refetch]
-  );
-
   const handleClaimFunds = useCallback(
     async (eventId: number) => {
       if (!isConnected || !connectedAddress) {
@@ -617,7 +559,6 @@ export default function MyEvents() {
                 event={event}
                 onCancel={handleCancelEvent}
                 onClaim={handleClaimFunds}
-                onDelete={handleDeleteEvent}
                 onWithdraw={handleWithdrawFunds}
                 cancelLoading={cancelingId === event.index}
                 claimLoading={claimingId === event.index}
