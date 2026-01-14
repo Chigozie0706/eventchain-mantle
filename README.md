@@ -52,7 +52,12 @@ Key functions:
 
 ---
 
-## 🚀 Deployment (Mantle Sepolia Testnet)
+## 🚀 Deployment (Mantle Sepolia)
+
+### 🔗 Deployed Contract Address
+
+- **Network:** Mantle Sepolia
+- **Contract Address:** `0x36faD67F403546f6c2947579a27d03bDAfe77d1a`
 
 ### 1. Prerequisites
 
@@ -62,18 +67,7 @@ Key functions:
 
 ---
 
-### 2. Environment Setup
-
-Create a `.env` file based on `.env.example`:
-
-```
-NEXT_PUBLIC_PINATA_JWT = YOUR_NEXT_PUBLIC_PINATA_JWT
-NEXT_PUBLIC_MAPBOX_TOKEN = YOUR_NEXT_PUBLIC_MAPBOX_TOKEN
-```
-
----
-
-### 3. Smart Contract Deployment (Foundry)
+### 2. Smart Contract Deployment (Foundry)
 
 ```bash
 cd Backend
@@ -90,10 +84,28 @@ After deployment, copy the deployed contract address and update the frontend env
 
 ---
 
+## 🌐 Live Demo
+
+- **Demo URL:** [https://eventchain-mantle.vercel.app/](https://eventchain-mantle.vercel.app/)
+
+The demo showcases the full EventChain flow: ticket purchase, on-chain collateral locking, and settlement or refund based on event conditions.
+
+---
+
 ## 🌐 Frontend Setup (Next.js)
 
 ```bash
 cd eventchain
+
+Create a `.env` file based on `.env.example`:
+
+```
+
+NEXT_PUBLIC_PINATA_JWT = YOUR_NEXT_PUBLIC_PINATA_JWT
+NEXT_PUBLIC_MAPBOX_TOKEN = YOUR_NEXT_PUBLIC_MAPBOX_TOKEN
+
+```
+
 pnpm install
 pnpm run dev
 ```
