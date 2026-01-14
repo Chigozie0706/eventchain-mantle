@@ -294,6 +294,11 @@ const EventForm = () => {
   );
 
   const uploadToIPFS = async (file: File): Promise<string> => {
+    const uploadToastId = toast.loading(
+      "Uploading image to IPFS...",
+      toastConfig.loading
+    );
+
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -317,11 +322,23 @@ const EventForm = () => {
         throw new Error("Failed to upload image to IPFS");
       }
 
-      const ipfsHash = response.data.IpfsHash;
-      return ipfsHash;
+      const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${response.data.IpfsHash}`;
+
+      toast.success("Image uploaded to IPFS successfully", {
+        ...toastConfig.success,
+        id: uploadToastId,
+      });
+
+      return ipfsUrl;
     } catch (error: any) {
       console.error("IPFS upload error:", error);
-      throw new Error("Failed to upload image to IPFS");
+
+      toast.error("Failed to upload image. Please try again.", {
+        ...toastConfig.error,
+        id: uploadToastId,
+      });
+
+      throw error;
     }
   };
 
